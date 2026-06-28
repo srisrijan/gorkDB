@@ -31,6 +31,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     role: Mapped[Optional["Role"]] = relationship("Role", back_populates="users")
+    table_access: Mapped[list["UserTableAccess"]] = relationship("UserTableAccess", back_populates="user")
     query_history: Mapped[list["QueryHistory"]] = relationship("QueryHistory", back_populates="user")
     audit_logs: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="user")
 
@@ -47,6 +48,18 @@ class Permission(Base):
     allowed_columns: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String), nullable=True)
 
     role: Mapped["Role"] = relationship("Role", back_populates="permissions")
+
+
+class UserTableAccess(Base):
+    """Direct per-user table permissions — used when a user has no role."""
+    __tablename__ = "user_table_access"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    table_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    allowed_operations: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
+
+    user: Mapped["User"] = relationship("User", back_populates="table_access")
 
 
 class QueryHistory(Base):

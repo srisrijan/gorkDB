@@ -4,15 +4,15 @@ import sqlglot
 import sqlglot.expressions as exp
 from sqlalchemy.orm import Session
 
-from app.models.auth import AuditLog, Permission, User
+from app.models.auth import AuditLog, Permission, User, UserTableAccess
 
 
 # Tables that belong to the system — always off-limits for regular queries
 _SYSTEM_TABLES = {
-    "users", "roles", "permissions", "audit_log", "query_history"
+    "users", "roles", "permissions", "audit_log", "query_history",
+    "user_table_access",
 }
 
-# Internal operations as uppercase
 _WRITE_OPS = {"INSERT", "UPDATE", "DELETE"}
 
 
@@ -57,6 +57,10 @@ def check_authorization(
     """
     Returns {"allowed": bool, "reason": str, "operation": str, "tables": list}
     and writes an audit log entry.
+
+    Authorization priority:
+    1. If the user has direct user_table_access rows → use those.
+    2. Otherwise fall back to the user's role permissions.
     """
     tree = _parse_query(sql)
     if tree is None:
@@ -75,8 +79,43 @@ def check_authorization(
             operation, list(tables),
         )
 
+    # --- Direct user-level access (new registration flow) ---
+    direct_access: list[UserTableAccess] = (
+        db.query(UserTableAccess)
+        .filter(UserTableAccess.user_id == user.id)
+        .all()
+    )
+
+    if direct_access:
+        access_map: dict[str, UserTableAccess] = {
+            a.table_name.lower(): a for a in direct_access
+        }
+        for table in tables:
+            access = access_map.get(table)
+            if access is None:
+                return _deny(
+                    user, sql, db,
+                    f"You don't have access to table '{table}'",
+                    operation, list(tables),
+                )
+            if operation not in [op.upper() for op in access.allowed_operations]:
+                return _deny(
+                    user, sql, db,
+                    f"Operation {operation} is not permitted on table '{table}'",
+                    operation, list(tables),
+                )
+        _write_audit(user, sql, db, True, None, operation, list(tables))
+        return {
+            "allowed": True,
+            "reason": "Authorized",
+            "operation": operation,
+            "tables": list(tables),
+            "columns": list(columns),
+        }
+
+    # --- Role-based access (existing demo users) ---
     if not user.role_id:
-        return _deny(user, sql, db, "User has no assigned role", operation, list(tables))
+        return _deny(user, sql, db, "User has no assigned access", operation, list(tables))
 
     perms: list[Permission] = (
         db.query(Permission)
@@ -90,18 +129,15 @@ def check_authorization(
         if perm is None:
             return _deny(
                 user, sql, db,
-                f"No permission defined for table '{table}' and your role",
+                f"You don't have access to table '{table}'",
                 operation, list(tables),
             )
-
         if operation not in [op.upper() for op in perm.allowed_operations]:
             return _deny(
                 user, sql, db,
-                f"Operation {operation} is not permitted on table '{table}' for your role",
+                f"Operation {operation} is not permitted on table '{table}'",
                 operation, list(tables),
             )
-
-        # Column-level check (only for explicitly restricted columns)
         if perm.allowed_columns:
             allowed_set = {c.lower() for c in perm.allowed_columns}
             for col_ref in columns:
@@ -109,7 +145,7 @@ def check_authorization(
                 if col_name not in allowed_set and col_name != "*":
                     return _deny(
                         user, sql, db,
-                        f"Column '{col_name}' on table '{table}' is not accessible for your role",
+                        f"Column '{col_name}' on table '{table}' is not accessible",
                         operation, list(tables),
                     )
 

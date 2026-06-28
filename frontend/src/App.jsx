@@ -14,7 +14,7 @@ export default function App() {
     fetch('/auth/me', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data) setUser({ username: data.username, role: data.role })
+        if (data) setUser({ username: data.username, accessible_tables: data.accessible_tables })
         setChecking(false)
       })
       .catch(() => setChecking(false))
@@ -44,10 +44,36 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <h1>GorkDB</h1>
-        <p className="role-badge">{user.role}</p>
-        <span style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 8 }}>
+        <span style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 4 }}>
           {user.username}
         </span>
+
+        <div style={{ marginBottom: 12 }}>
+          <p style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Table Access
+          </p>
+          {user.accessible_tables && user.accessible_tables.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {user.accessible_tables.map(t => (
+                <span
+                  key={t}
+                  style={{
+                    fontSize: '0.78rem',
+                    background: '#1e293b',
+                    color: '#a5b4fc',
+                    borderRadius: 4,
+                    padding: '2px 8px',
+                  }}
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>No tables assigned</span>
+          )}
+        </div>
+
         <button
           className={`nav-btn${page === 'query' ? ' active' : ''}`}
           onClick={() => setPage('query')}

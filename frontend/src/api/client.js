@@ -35,10 +35,11 @@ export const api = {
     })
   },
 
-  register(username, email, password, role_name) {
+  // table_access: string[] — list of table names the new user can SELECT
+  register(username, email, password, table_access) {
     return request('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ username, email, password, role_name }),
+      body: JSON.stringify({ username, email, password, table_access }),
     })
   },
 
