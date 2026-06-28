@@ -1,9 +1,3 @@
--- ============================================================
--- GorkDB RBAC seed — run this in Supabase SQL Editor
--- after running the main seed.sql (HR schema).
--- ============================================================
-
--- ── Auth tables ────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS roles (
     id          SERIAL PRIMARY KEY,
